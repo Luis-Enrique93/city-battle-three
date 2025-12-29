@@ -4,13 +4,24 @@ import type { GameEvent } from '../../core/event-manager'
 import { ImageManager } from '../../core/image-manager'
 import { Globals } from '../../core/globals'
 import { CollisionDetectorEvent } from '../../core/collision-detector'
+import { BulletEvent } from '../bullet/bullet'
+import { BulletSpeed, BulletType } from '../bullet/bullet'
+import { TankEvent } from '../../core/bullet-factory'
 import { Wall } from '../walls/wall'
 import { Base } from '../base/base'
 import { Water } from '../water/water'
 import * as THREE from 'three'
 
 export class Tank extends Sprite {
-  private type: string = 'player1'
+  public static Type = {
+    PLAYER_1: 'player1',
+    BASIC: 'basic',
+    FAST: 'fast',
+    POWER: 'power',
+    ARMOR: 'armor',
+  } as const
+
+  private type: string = Tank.Type.PLAYER_1
   private colorValue: number = 0
   private trackFrame: number = 1
   private trackAnimationTimer: number = 0
@@ -19,12 +30,19 @@ export class Tank extends Sprite {
   private isPlayerTank: boolean = true
   private collisionResolvingMoveLimit: number = 10
 
+  private bulletSize: number = 10
+  private bulletSpeed: number = BulletSpeed.NORMAL
+  private bulletsLimit: number = 1
+  private bullets: number = 0
+  private bulletType: string = BulletType.NORMAL
+
   constructor(eventManager: EventManager, threeScene: THREE.Scene) {
     super(eventManager, threeScene)
 
     this.eventManager.addSubscriber(this, [
       CollisionDetectorEvent.COLLISION,
       CollisionDetectorEvent.OUT_OF_BOUNDS,
+      BulletEvent.DESTROYED,
     ])
 
     this.setDimensions(Globals.UNIT_SIZE, Globals.UNIT_SIZE)
@@ -44,6 +62,23 @@ export class Tank extends Sprite {
 
   public setIsPlayer(isPlayer: boolean): void {
     this.isPlayerTank = isPlayer
+  }
+
+  public getType(): string {
+    return this.type
+  }
+
+  public setType(type: string): void {
+    this.type = type
+    this.updateTexture()
+  }
+
+  public setValue(_value: number): void {
+    // TODO: Implement value system for points
+  }
+
+  public setNormalSpeed(speed: number): void {
+    super.setNormalSpeed(speed)
   }
 
   private getImageName(): string {
@@ -129,8 +164,56 @@ export class Tank extends Sprite {
     this.updateThreeSpritePosition()
   }
 
+  public getBulletSize(): number {
+    return this.bulletSize
+  }
+
+  public setBulletSize(size: number): void {
+    this.bulletSize = size
+  }
+
+  public getBulletSpeed(): number {
+    return this.bulletSpeed
+  }
+
+  public setBulletSpeed(speed: number): void {
+    this.bulletSpeed = speed
+  }
+
+  public getBulletsLimit(): number {
+    return this.bulletsLimit
+  }
+
+  public setBulletsLimit(limit: number): void {
+    this.bulletsLimit = limit
+  }
+
+  public getBulletType(): string {
+    return this.bulletType
+  }
+
+  public setBulletType(type: string): void {
+    this.bulletType = type
+  }
+
+  public shoot(): void {
+    if (this.isDestroyed()) {
+      return
+    }
+    if (this.bullets >= this.bulletsLimit) {
+      return
+    }
+    this.bullets++
+    this.eventManager.fireEvent({
+      name: TankEvent.SHOOT,
+      tank: this,
+    })
+  }
+
   public notify(event: GameEvent): void {
-    if (
+    if (event.name === BulletEvent.DESTROYED && event.tank === this) {
+      this.bullets--
+    } else if (
       this.isWallCollision(event) ||
       this.isTankCollision(event) ||
       this.isBaseCollision(event) ||
@@ -206,6 +289,10 @@ export class Tank extends Sprite {
   }
 
   public isCollidable(): boolean {
+    return true // TODO: Implement tank states (appearing, invincible, etc.)
+  }
+
+  public canBeDestroyed(): boolean {
     return true // TODO: Implement tank states (appearing, invincible, etc.)
   }
 }

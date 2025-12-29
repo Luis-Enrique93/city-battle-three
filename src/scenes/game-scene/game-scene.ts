@@ -10,7 +10,13 @@ import { STAGES } from '../../core/stages'
 import { MapLoader } from '../../core/map-loader'
 import { SpriteContainer } from '../../core/sprite-container'
 import { CollisionDetector } from '../../core/collision-detector'
+import { BulletFactory } from '../../core/bullet-factory'
+import { BulletExplosionFactory } from '../../core/bullet-explosion-factory'
+import { EnemyFactory } from '../../core/enemy-factory'
+import { AITankControllerContainer } from '../../core/ai-tank-controller-container'
+import { AITankControllerFactory } from '../../core/ai-tank-controller-factory'
 import { Rect } from '../../geometry/rect'
+import { Point } from '../../geometry'
 import * as THREE from 'three'
 
 export class GameScene implements IScene, IEventSubscriber {
@@ -20,6 +26,8 @@ export class GameScene implements IScene, IEventSubscriber {
   private backgroundPlane: THREE.Mesh | null = null
   private pressedKeys: Set<number> = new Set()
   private spriteContainer: SpriteContainer
+  private enemyFactory: EnemyFactory
+  private aiControllersContainer: AITankControllerContainer
 
   constructor(sceneManager: ISceneManager, threeScene: THREE.Scene, stage = 1) {
     this.threeScene = threeScene
@@ -40,9 +48,19 @@ export class GameScene implements IScene, IEventSubscriber {
     )
     new CollisionDetector(eventManager, gameFieldBounds, this.spriteContainer)
 
+    // Crear BulletFactory y BulletExplosionFactory
+    new BulletFactory(eventManager, this.threeScene)
+    new BulletExplosionFactory(eventManager, this.threeScene)
+
+    // Crear sistema de enemigos
+    this.aiControllersContainer = new AITankControllerContainer(eventManager)
+    new AITankControllerFactory(eventManager, this.spriteContainer)
+    this.enemyFactory = new EnemyFactory(eventManager, this.threeScene)
+
     this.createBackground()
     this.loadMap(eventManager, stage)
     this.createTank(eventManager)
+    this.setupEnemyFactory(stage)
   }
 
   private createBackground(): void {
@@ -87,10 +105,32 @@ export class GameScene implements IScene, IEventSubscriber {
     this.tank.setTankPosition(startX, startY)
   }
 
+  private setupEnemyFactory(stage: number): void {
+    const stageData = STAGES[(stage - 1) % STAGES.length]
+    const gameFieldX = Globals.UNIT_SIZE
+    const gameFieldY = Globals.TILE_SIZE
+
+    // Posiciones de spawn de enemigos (arriba del mapa)
+    this.enemyFactory.setPositions([
+      new Point(gameFieldX + 6 * Globals.UNIT_SIZE, gameFieldY),
+      new Point(gameFieldX + 12 * Globals.UNIT_SIZE, gameFieldY),
+      new Point(gameFieldX, gameFieldY),
+    ])
+
+    this.enemyFactory.setEnemies(stageData.tanks)
+    this.enemyFactory.setEnemyCountLimit(4)
+  }
+
   public update(): void {
-    if (this.tank) {
-      this.tank.update()
+    // Actualizar todos los sprites del contenedor
+    const sprites = this.spriteContainer.getSprites()
+    for (const sprite of sprites) {
+      sprite.update()
     }
+
+    // Actualizar sistema de enemigos
+    this.enemyFactory.update()
+    this.aiControllersContainer.update()
   }
 
   public draw(_renderer: Renderer): void {
@@ -121,7 +161,9 @@ export class GameScene implements IScene, IEventSubscriber {
     } else if (key === Keyboard.Key.RIGHT) {
       this.setTankDirection(SpriteDirection.RIGHT)
     } else if (key === Keyboard.Key.SPACE) {
-      // TODO: Implement shooting
+      if (this.tank) {
+        this.tank.shoot()
+      }
     }
   }
 

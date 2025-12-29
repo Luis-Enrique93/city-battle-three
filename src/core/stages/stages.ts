@@ -9,6 +9,27 @@ export interface Stage {
 export const STAGES: Stage[] = [
   {
     map: STAGE_1_MAP,
-    tanks: [], // Por ahora sin enemigos
+    tanks: [
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'basic',
+      'fast',
+      'fast',
+    ],
   },
 ]
