@@ -31,6 +31,8 @@ export abstract class Wall extends Sprite {
     const texture = imageManager.getTexture(this.getImageName() as any)
     if (texture) {
       this.createThreeSprite(texture)
+      // Asegurar que la posición se actualice después de crear el sprite
+      this.updateThreeSpritePosition()
     } else {
       setTimeout(() => this.createWallSprite(), 100)
     }

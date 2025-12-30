@@ -115,44 +115,18 @@ export class GameScene implements IScene, IEventSubscriber {
   }
 
   private setupBaseWallBuilder(eventManager: EventManager): void {
-    const gameFieldX = Globals.UNIT_SIZE
-    const gameFieldY = Globals.TILE_SIZE
     // Base está en (224, 400) según el mapa
-    // Muros alrededor de la base (8 posiciones)
+    // Muros alrededor de la base (8 posiciones) - usar posiciones absolutas del mapa
     const baseWallBuilder = new BaseWallBuilder()
     baseWallBuilder.setWallPositions([
-      new Point(
-        gameFieldX + 11 * Globals.UNIT_SIZE,
-        gameFieldY + 25 * Globals.UNIT_SIZE,
-      ), // (208, 416) -> relativo
-      new Point(
-        gameFieldX + 11 * Globals.UNIT_SIZE,
-        gameFieldY + 24 * Globals.UNIT_SIZE,
-      ), // (208, 400)
-      new Point(
-        gameFieldX + 11 * Globals.UNIT_SIZE,
-        gameFieldY + 23 * Globals.UNIT_SIZE,
-      ), // (208, 384)
-      new Point(
-        gameFieldX + 12 * Globals.UNIT_SIZE,
-        gameFieldY + 23 * Globals.UNIT_SIZE,
-      ), // (224, 384)
-      new Point(
-        gameFieldX + 13 * Globals.UNIT_SIZE,
-        gameFieldY + 23 * Globals.UNIT_SIZE,
-      ), // (240, 384)
-      new Point(
-        gameFieldX + 14 * Globals.UNIT_SIZE,
-        gameFieldY + 23 * Globals.UNIT_SIZE,
-      ), // (256, 384)
-      new Point(
-        gameFieldX + 14 * Globals.UNIT_SIZE,
-        gameFieldY + 24 * Globals.UNIT_SIZE,
-      ), // (256, 400)
-      new Point(
-        gameFieldX + 14 * Globals.UNIT_SIZE,
-        gameFieldY + 25 * Globals.UNIT_SIZE,
-      ), // (256, 416)
+      new Point(208, 416), // Izquierda abajo
+      new Point(208, 400), // Izquierda centro
+      new Point(208, 384), // Izquierda arriba
+      new Point(224, 384), // Centro arriba
+      new Point(240, 384), // Centro-derecha arriba
+      new Point(256, 384), // Derecha arriba
+      new Point(256, 400), // Derecha centro
+      new Point(256, 416), // Derecha abajo
     ])
     baseWallBuilder.setSpriteContainer(this.spriteContainer)
     baseWallBuilder.setEventManager(eventManager)
