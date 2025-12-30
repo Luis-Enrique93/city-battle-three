@@ -2,6 +2,8 @@ import { EventManager } from '../event-manager'
 import type { IEventSubscriber, GameEvent } from '../event-manager'
 import { Tank } from '../../game-objects/tank'
 import { Point } from '../../geometry'
+import { TankExplosionEvent } from '../../game-objects/explosions/tank-explosion'
+import { TankExplosion } from '../../game-objects/explosions/tank-explosion'
 import * as THREE from 'three'
 
 export const EnemyFactoryEvent = {
@@ -20,13 +22,12 @@ export class EnemyFactory implements IEventSubscriber {
   private enemyCountLimit: number = 4
   private interval: number = 150
   private timer: number = 150
+  private flashingTanks: number[] = [4, 11, 18] // Tanques que sueltan power-ups (1-indexed)
 
   constructor(eventManager: EventManager, threeScene: THREE.Scene) {
     this.eventManager = eventManager
     this.threeScene = threeScene
-    this.eventManager.addSubscriber(this, [
-      // TODO: Add TankExplosion.Event.DESTROYED when implemented
-    ])
+    this.eventManager.addSubscriber(this, [TankExplosionEvent.DESTROYED])
   }
 
   public setEnemies(enemies: string[]): void {
@@ -100,6 +101,11 @@ export class EnemyFactory implements IEventSubscriber {
       // TODO: Implement hitLimit and colorValues
     }
 
+    // Marcar tanques flashing (los que sueltan power-ups)
+    if (this.flashingTanks.includes(this.enemyIndex + 1)) {
+      tank.startFlashing()
+    }
+
     this.eventManager.fireEvent({
       name: EnemyFactoryEvent.ENEMY_CREATED,
       enemy: tank,
@@ -136,15 +142,21 @@ export class EnemyFactory implements IEventSubscriber {
     return this.enemyCount >= this.enemyCountLimit
   }
 
-  public notify(_event: GameEvent): void {
-    // TODO: Handle TankExplosion.Event.DESTROYED
-    // if (event.name === TankExplosion.Event.DESTROYED) {
-    //   if (event.explosion.getTank().isEnemy()) {
-    //     this.enemyCount--
-    //   }
-    //   if (event.explosion.getTank().isEnemy() && this.enemyCount <= 0 && this.getEnemiesToCreateCount() == 0) {
-    //     this.eventManager.fireEvent({ name: EnemyFactoryEvent.LAST_ENEMY_DESTROYED })
-    //   }
-    // }
+  public notify(event: GameEvent): void {
+    if (event.name === TankExplosionEvent.DESTROYED) {
+      const explosion = event.explosion as TankExplosion
+      if (explosion.getTank().isEnemy()) {
+        this.enemyCount--
+      }
+      if (
+        explosion.getTank().isEnemy() &&
+        this.enemyCount <= 0 &&
+        this.getEnemiesToCreateCount() === 0
+      ) {
+        this.eventManager.fireEvent({
+          name: EnemyFactoryEvent.LAST_ENEMY_DESTROYED,
+        })
+      }
+    }
   }
 }

@@ -123,11 +123,24 @@ export class Bullet extends Sprite {
   }
 
   private isWallCollision(event: GameEvent): boolean {
-    return (
-      event.name === CollisionDetectorEvent.COLLISION &&
-      event.initiator === this &&
-      event.sprite instanceof Wall
-    )
+    if (
+      event.name !== CollisionDetectorEvent.COLLISION ||
+      event.initiator !== this ||
+      !(event.sprite instanceof Wall)
+    ) {
+      return false
+    }
+    const wall = event.sprite as Wall
+    // Las balas normales no destruyen muros de acero, pero sí se destruyen al chocar
+    // Las balas mejoradas destruyen cualquier muro
+    if (this.bulletType === BulletType.ENHANCED) {
+      return true
+    }
+    // Si el muro es invencible, la bala se destruye pero no destruye el muro
+    if (wall.isInvincibleForNormalBullets()) {
+      return true
+    }
+    return true
   }
 
   private isBaseCollision(event: GameEvent): boolean {

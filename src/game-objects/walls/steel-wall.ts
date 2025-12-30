@@ -5,7 +5,7 @@ import * as THREE from 'three'
 export class SteelWall extends Wall {
   constructor(eventManager: EventManager, threeScene: THREE.Scene) {
     super(eventManager, threeScene)
-    this.invincibleForNormalBullets = true
+    this.makeInvincibleForNormalBullets()
   }
 
   protected getImageName(): string {

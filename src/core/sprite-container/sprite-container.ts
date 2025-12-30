@@ -39,6 +39,10 @@ export class SpriteContainer implements IEventSubscriber {
     return this.sprites
   }
 
+  public getTanks(): Tank[] {
+    return this.sprites.filter(sprite => sprite instanceof Tank) as Tank[]
+  }
+
   public getEnemyTanks(): Tank[] {
     return this.sprites.filter(
       sprite => sprite instanceof Tank && (sprite as Tank).isEnemy(),

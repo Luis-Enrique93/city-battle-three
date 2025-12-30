@@ -6,16 +6,24 @@ import { EnemyFactoryEvent } from '../enemy-factory'
 import { SpriteContainer } from '../sprite-container'
 import { Random } from '../random'
 import { Tank } from '../../game-objects/tank'
+import { PowerUpHandlerEvent } from '../power-up-handler'
+import { FreezeTimerEvent } from '../freeze-timer'
+import type { AITankControllerContainer } from '../ai-tank-controller-container'
 
 export class AITankControllerFactory implements IEventSubscriber {
   private eventManager: EventManager
   private spriteContainer: SpriteContainer
+  private controllersContainer: AITankControllerContainer | null = null
   private freezed: boolean = false
 
   constructor(eventManager: EventManager, spriteContainer: SpriteContainer) {
     this.eventManager = eventManager
     this.spriteContainer = spriteContainer
-    this.eventManager.addSubscriber(this, [EnemyFactoryEvent.ENEMY_CREATED])
+    this.eventManager.addSubscriber(this, [
+      EnemyFactoryEvent.ENEMY_CREATED,
+      PowerUpHandlerEvent.FREEZE,
+      FreezeTimerEvent.UNFREEZE,
+    ])
   }
 
   public createController(tank: Tank): AITankController {
@@ -36,17 +44,39 @@ export class AITankControllerFactory implements IEventSubscriber {
     return this.freezed
   }
 
+  public setControllersContainer(container: AITankControllerContainer): void {
+    this.controllersContainer = container
+  }
+
   public freeze(): void {
     this.freezed = true
+    // Congelar todos los controladores existentes
+    if (this.controllersContainer) {
+      const controllers = this.controllersContainer.getControllers()
+      for (const controller of controllers) {
+        controller.freeze()
+      }
+    }
   }
 
   public unfreeze(): void {
     this.freezed = false
+    // Descongelar todos los controladores existentes
+    if (this.controllersContainer) {
+      const controllers = this.controllersContainer.getControllers()
+      for (const controller of controllers) {
+        controller.unfreeze()
+      }
+    }
   }
 
   public notify(event: GameEvent): void {
     if (event.name === EnemyFactoryEvent.ENEMY_CREATED) {
       this.createController(event.enemy as Tank)
+    } else if (event.name === PowerUpHandlerEvent.FREEZE) {
+      this.freeze()
+    } else if (event.name === FreezeTimerEvent.UNFREEZE) {
+      this.unfreeze()
     }
   }
 }

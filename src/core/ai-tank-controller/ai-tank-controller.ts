@@ -5,6 +5,9 @@ import { Tank } from '../../game-objects/tank'
 import { SpriteContainer } from '../sprite-container'
 import { SpriteDirection } from '../../sprites/sprite'
 import { Random } from '../random'
+import { TankEvent } from '../bullet-factory'
+import { PowerUpHandlerEvent } from '../power-up-handler'
+import { FreezeTimerEvent } from '../freeze-timer'
 
 export const AITankControllerEvent = {
   CREATED: 'AITankController.Event.CREATED',
@@ -36,6 +39,12 @@ export class AITankController implements IEventSubscriber {
     this.eventManager = eventManager
 
     this.tank.setNormalSpeed(this.tank.getNormalSpeed())
+
+    this.eventManager.addSubscriber(this, [
+      TankEvent.DESTROYED,
+      PowerUpHandlerEvent.FREEZE,
+      FreezeTimerEvent.UNFREEZE,
+    ])
 
     this.eventManager.fireEvent({
       name: AITankControllerEvent.CREATED,
@@ -131,7 +140,21 @@ export class AITankController implements IEventSubscriber {
     this.freezed = false
   }
 
-  public notify(_event: GameEvent): void {
-    // TODO: Handle Tank.Event.DESTROYED, PowerUpHandler.Event.FREEZE, etc.
+  public notify(event: GameEvent): void {
+    if (event.name === TankEvent.DESTROYED && event.tank === this.tank) {
+      this.destroy()
+    } else if (event.name === PowerUpHandlerEvent.FREEZE) {
+      this.freeze()
+    } else if (event.name === FreezeTimerEvent.UNFREEZE) {
+      this.unfreeze()
+    }
+  }
+
+  private destroy(): void {
+    this.eventManager.removeSubscriber(this)
+    this.eventManager.fireEvent({
+      name: AITankControllerEvent.DESTROYED,
+      controller: this,
+    })
   }
 }

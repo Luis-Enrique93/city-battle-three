@@ -12,15 +12,25 @@ import { SpriteContainer } from '../../core/sprite-container'
 import { CollisionDetector } from '../../core/collision-detector'
 import { BulletFactory } from '../../core/bullet-factory'
 import { BulletExplosionFactory } from '../../core/bullet-explosion-factory'
-import { EnemyFactory } from '../../core/enemy-factory'
+import { TankExplosionFactory } from '../../core/tank-explosion-factory'
+import { PointsFactory } from '../../core/points-factory'
+import { EnemyFactory, EnemyFactoryEvent } from '../../core/enemy-factory'
 import { AITankControllerContainer } from '../../core/ai-tank-controller-container'
 import { AITankControllerFactory } from '../../core/ai-tank-controller-factory'
+import { Player, PlayerEvent } from '../../core/player'
+import { PlayerTankFactory } from '../../core/player-tank-factory'
 import { Rect } from '../../geometry/rect'
 import { Point } from '../../geometry'
 import * as THREE from 'three'
+import { PowerUpFactory } from '../../core/power-up-factory'
+import { PowerUpHandler } from '../../core/power-up-handler'
+import { FreezeTimer } from '../../core/freeze-timer'
+import { ShovelHandler } from '../../core/shovel-handler'
+import { BaseWallBuilder } from '../../core/base-wall-builder'
 
 export class GameScene implements IScene, IEventSubscriber {
   private threeScene: THREE.Scene
+  private sceneManager: ISceneManager
   private tank: Tank | null = null
   private mapLoader: MapLoader | null = null
   private backgroundPlane: THREE.Mesh | null = null
@@ -28,15 +38,42 @@ export class GameScene implements IScene, IEventSubscriber {
   private spriteContainer: SpriteContainer
   private enemyFactory: EnemyFactory
   private aiControllersContainer: AITankControllerContainer
+  private player: Player
+  private playerTankFactory: PlayerTankFactory
+  private powerUpFactory: PowerUpFactory
+  private freezeTimer: FreezeTimer
+  private shovelHandler: ShovelHandler
+  private currentStage: number
 
   constructor(sceneManager: ISceneManager, threeScene: THREE.Scene, stage = 1) {
     this.threeScene = threeScene
+    this.sceneManager = sceneManager
+    this.currentStage = stage
 
     const eventManager = sceneManager.getEventManager()
     eventManager.addSubscriber(this, [
       Keyboard.Event.KEY_PRESSED,
       Keyboard.Event.KEY_RELEASED,
+      EnemyFactoryEvent.LAST_ENEMY_DESTROYED,
+      PlayerEvent.OUT_OF_LIVES,
     ])
+
+    // Crear Player
+    this.player = new Player()
+    this.player.setEventManager(eventManager)
+
+    // Crear PlayerTankFactory para respawn
+    this.playerTankFactory = new PlayerTankFactory(
+      eventManager,
+      this.threeScene,
+    )
+    const gameFieldX = Globals.UNIT_SIZE
+    const gameFieldY = Globals.TILE_SIZE
+    const spawnPosition = new Point(
+      gameFieldX + 4 * Globals.UNIT_SIZE,
+      gameFieldY + 12 * Globals.UNIT_SIZE,
+    )
+    this.playerTankFactory.setAppearPosition(spawnPosition)
 
     // Crear SpriteContainer y CollisionDetector
     this.spriteContainer = new SpriteContainer(eventManager)
@@ -51,16 +88,76 @@ export class GameScene implements IScene, IEventSubscriber {
     // Crear BulletFactory y BulletExplosionFactory
     new BulletFactory(eventManager, this.threeScene)
     new BulletExplosionFactory(eventManager, this.threeScene)
+    new TankExplosionFactory(eventManager, this.threeScene)
+    new PointsFactory(eventManager, this.threeScene)
+    this.powerUpFactory = new PowerUpFactory(eventManager, this.threeScene)
+    const powerUpHandler = new PowerUpHandler(eventManager, this.threeScene)
+    powerUpHandler.setSpriteContainer(this.spriteContainer)
+    this.freezeTimer = new FreezeTimer(eventManager)
+    this.shovelHandler = new ShovelHandler(eventManager)
 
     // Crear sistema de enemigos
     this.aiControllersContainer = new AITankControllerContainer(eventManager)
-    new AITankControllerFactory(eventManager, this.spriteContainer)
+    const aiControllerFactory = new AITankControllerFactory(
+      eventManager,
+      this.spriteContainer,
+    )
+    aiControllerFactory.setControllersContainer(this.aiControllersContainer)
     this.enemyFactory = new EnemyFactory(eventManager, this.threeScene)
 
     this.createBackground()
     this.loadMap(eventManager, stage)
-    this.createTank(eventManager)
+    // Configurar BaseWallBuilder para ShovelHandler
+    this.setupBaseWallBuilder(eventManager)
+    // Crear tanque inicial del jugador
+    this.playerTankFactory.create()
     this.setupEnemyFactory(stage)
+  }
+
+  private setupBaseWallBuilder(eventManager: EventManager): void {
+    const gameFieldX = Globals.UNIT_SIZE
+    const gameFieldY = Globals.TILE_SIZE
+    // Base está en (224, 400) según el mapa
+    // Muros alrededor de la base (8 posiciones)
+    const baseWallBuilder = new BaseWallBuilder()
+    baseWallBuilder.setWallPositions([
+      new Point(
+        gameFieldX + 11 * Globals.UNIT_SIZE,
+        gameFieldY + 25 * Globals.UNIT_SIZE,
+      ), // (208, 416) -> relativo
+      new Point(
+        gameFieldX + 11 * Globals.UNIT_SIZE,
+        gameFieldY + 24 * Globals.UNIT_SIZE,
+      ), // (208, 400)
+      new Point(
+        gameFieldX + 11 * Globals.UNIT_SIZE,
+        gameFieldY + 23 * Globals.UNIT_SIZE,
+      ), // (208, 384)
+      new Point(
+        gameFieldX + 12 * Globals.UNIT_SIZE,
+        gameFieldY + 23 * Globals.UNIT_SIZE,
+      ), // (224, 384)
+      new Point(
+        gameFieldX + 13 * Globals.UNIT_SIZE,
+        gameFieldY + 23 * Globals.UNIT_SIZE,
+      ), // (240, 384)
+      new Point(
+        gameFieldX + 14 * Globals.UNIT_SIZE,
+        gameFieldY + 23 * Globals.UNIT_SIZE,
+      ), // (256, 384)
+      new Point(
+        gameFieldX + 14 * Globals.UNIT_SIZE,
+        gameFieldY + 24 * Globals.UNIT_SIZE,
+      ), // (256, 400)
+      new Point(
+        gameFieldX + 14 * Globals.UNIT_SIZE,
+        gameFieldY + 25 * Globals.UNIT_SIZE,
+      ), // (256, 416)
+    ])
+    baseWallBuilder.setSpriteContainer(this.spriteContainer)
+    baseWallBuilder.setEventManager(eventManager)
+    baseWallBuilder.setThreeScene(this.threeScene)
+    this.shovelHandler.setBaseWallBuilder(baseWallBuilder)
   }
 
   private createBackground(): void {
@@ -93,16 +190,13 @@ export class GameScene implements IScene, IEventSubscriber {
     this.mapLoader.loadMap(stageData.map)
   }
 
-  private createTank(eventManager: EventManager): void {
-    // Posición inicial: Gamefield offset + posición relativa
-    // Gamefield: x = UNIT_SIZE, y = TILE_SIZE
-    const gameFieldX = Globals.UNIT_SIZE
-    const gameFieldY = Globals.TILE_SIZE
-    const startX = gameFieldX + 4 * Globals.UNIT_SIZE
-    const startY = gameFieldY + 12 * Globals.UNIT_SIZE
-
-    this.tank = new Tank(eventManager, this.threeScene)
-    this.tank.setTankPosition(startX, startY)
+  private updatePlayerTankReference(): void {
+    // Buscar el tanque del jugador en el sprite container
+    const tanks = this.spriteContainer.getTanks()
+    const playerTank = tanks.find((tank: Tank) => tank.isPlayer())
+    if (playerTank) {
+      this.tank = playerTank
+    }
   }
 
   private setupEnemyFactory(stage: number): void {
@@ -119,9 +213,32 @@ export class GameScene implements IScene, IEventSubscriber {
 
     this.enemyFactory.setEnemies(stageData.tanks)
     this.enemyFactory.setEnemyCountLimit(4)
+
+    // Posiciones donde pueden aparecer power-ups (centro del mapa)
+    this.powerUpFactory.setPositions([
+      new Point(
+        gameFieldX + 6 * Globals.UNIT_SIZE,
+        gameFieldY + 6 * Globals.UNIT_SIZE,
+      ),
+      new Point(
+        gameFieldX + 6 * Globals.UNIT_SIZE,
+        gameFieldY + 7 * Globals.UNIT_SIZE,
+      ),
+      new Point(
+        gameFieldX + 7 * Globals.UNIT_SIZE,
+        gameFieldY + 6 * Globals.UNIT_SIZE,
+      ),
+      new Point(
+        gameFieldX + 7 * Globals.UNIT_SIZE,
+        gameFieldY + 7 * Globals.UNIT_SIZE,
+      ),
+    ])
   }
 
   public update(): void {
+    // Actualizar referencia al tanque del jugador (por si respawneó)
+    this.updatePlayerTankReference()
+
     // Actualizar todos los sprites del contenedor
     const sprites = this.spriteContainer.getSprites()
     for (const sprite of sprites) {
@@ -131,6 +248,8 @@ export class GameScene implements IScene, IEventSubscriber {
     // Actualizar sistema de enemigos
     this.enemyFactory.update()
     this.aiControllersContainer.update()
+    this.freezeTimer.update()
+    this.shovelHandler.update()
   }
 
   public draw(_renderer: Renderer): void {
@@ -138,6 +257,20 @@ export class GameScene implements IScene, IEventSubscriber {
   }
 
   public notify(event: GameEvent): void {
+    if (event.name === EnemyFactoryEvent.LAST_ENEMY_DESTROYED) {
+      this.handleWin()
+      return
+    }
+
+    if (event.name === PlayerEvent.OUT_OF_LIVES) {
+      this.playerTankFactory.setActive(false)
+      // TODO: Show game over screen
+      return
+    }
+
+    // Actualizar referencia al tanque del jugador
+    this.updatePlayerTankReference()
+
     if (!this.tank) {
       return
     }
@@ -147,6 +280,14 @@ export class GameScene implements IScene, IEventSubscriber {
     } else if (event.name === Keyboard.Event.KEY_RELEASED) {
       this.handleKeyReleased(event.key as number)
     }
+  }
+
+  private handleWin(): void {
+    // Avanzar al siguiente stage después de un delay
+    setTimeout(() => {
+      const nextStage = this.currentStage + 1
+      this.sceneManager.toGameScene(nextStage)
+    }, 2000) // 2 segundos de delay
   }
 
   private handleKeyPressed(key: number): void {

@@ -9,6 +9,11 @@ import * as THREE from 'three'
 
 export class TankEvent {
   public static readonly SHOOT = 'Tank.Event.SHOOT'
+  public static readonly DESTROYED = 'Tank.Event.DESTROYED'
+  public static readonly PLAYER_DESTROYED = 'Tank.Event.PLAYER_DESTROYED'
+  public static readonly ENEMY_DESTROYED = 'Tank.Event.ENEMY_DESTROYED'
+  public static readonly FLASHING_TANK_DESTROYED =
+    'Tank.Event.FLASHING_TANK_DESTROYED'
 }
 
 export class BulletFactory implements IEventSubscriber {
