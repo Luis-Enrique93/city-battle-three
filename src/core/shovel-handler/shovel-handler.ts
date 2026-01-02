@@ -37,21 +37,16 @@ export class ShovelHandler implements IEventSubscriber {
   public start(): void {
     // Si ya está activo, resetear el timer y reconstruir los muros de acero
     if (this.active) {
-      console.log(
-        'ShovelHandler.start: Already active, resetting timer and rebuilding steel walls',
-      )
       this.timer = 0
       this.rebuildWall(new SteelWallFactory())
       return
     }
     this.active = true
     this.timer = 0
-    console.log('ShovelHandler.start: Activating shovel, creating steel walls')
     this.rebuildWall(new SteelWallFactory())
   }
 
   public end(): void {
-    console.log('ShovelHandler.end: Deactivating shovel, restoring brick walls')
     this.rebuildWall(new BrickWallFactory())
   }
 
@@ -59,18 +54,11 @@ export class ShovelHandler implements IEventSubscriber {
     if (!this.baseWallBuilder) {
       return
     }
-    const factoryName = wallFactory.constructor.name
-    console.log(
-      `ShovelHandler.rebuildWall: Rebuilding with ${factoryName}, active: ${this.active}`,
-    )
     this.baseWallBuilder.destroyWall()
     // Delay para asegurar que la destrucción se complete antes de crear nuevos muros
     // Usar requestAnimationFrame para esperar al siguiente frame
     requestAnimationFrame(() => {
       if (this.baseWallBuilder) {
-        console.log(
-          `ShovelHandler.rebuildWall: Creating walls with ${factoryName}`,
-        )
         this.baseWallBuilder.setWallFactory(wallFactory)
         this.baseWallBuilder.buildWall()
       }
@@ -83,9 +71,6 @@ export class ShovelHandler implements IEventSubscriber {
     }
     this.timer++
     if (this.timer > this.duration) {
-      console.log(
-        `ShovelHandler.update: Timer expired (${this.timer} > ${this.duration}), ending shovel effect`,
-      )
       this.active = false
       this.end()
     }

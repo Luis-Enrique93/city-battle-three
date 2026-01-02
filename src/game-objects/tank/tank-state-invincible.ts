@@ -1,4 +1,5 @@
 import { Tank } from './tank'
+import { TankStateNormal } from './tank-state-normal'
 import { EventManager } from '../../core/event-manager'
 import { ImageManager } from '../../core/image-manager'
 import { Animation } from '../../core/animation'
@@ -9,8 +10,7 @@ export const TankStateInvincibleEvent = {
   END: 'TankStateInvincible.Event.END',
 } as const
 
-export class TankStateInvincible {
-  private tank: Tank
+export class TankStateInvincible extends TankStateNormal {
   private eventManager: EventManager
   private shieldAnimation: Animation
   private stateDuration: number = 345
@@ -19,7 +19,7 @@ export class TankStateInvincible {
   private threeScene: THREE.Scene
 
   constructor(tank: Tank, threeScene: THREE.Scene) {
-    this.tank = tank
+    super(tank)
     this.eventManager = tank.getEventManager()
     this.threeScene = threeScene
     this.shieldAnimation = new Animation([1, 2], 2)
@@ -70,26 +70,27 @@ export class TankStateInvincible {
     }
   }
 
-  public update(): void {
+  public setStateDuration(duration: number): void {
+    this.stateDuration = duration
+  }
+
+  public override canBeDestroyed(): boolean {
+    return false
+  }
+
+  public override update(): void {
+    super.update()
     this.shieldAnimation.update()
     this.updateShieldTexture()
     this.updateShieldPosition()
     this.stateTimer++
     if (this.stateTimer > this.stateDuration) {
+      // Solo disparar el evento, el Tank se encargará de limpiar el estado
       this.eventManager.fireEvent({
         name: TankStateInvincibleEvent.END,
         tank: this.tank,
       })
-      this.destroy()
     }
-  }
-
-  public setStateDuration(duration: number): void {
-    this.stateDuration = duration
-  }
-
-  public canBeDestroyed(): boolean {
-    return false
   }
 
   public destroy(): void {

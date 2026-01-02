@@ -5,6 +5,7 @@ import { Tank } from '../../game-objects/tank/tank'
 import { Bullet } from '../../game-objects/bullet'
 import { SpriteDirection } from '../../sprites/sprite'
 import { Point } from '../../geometry/point'
+import { SoundManager } from '../sound-manager'
 import * as THREE from 'three'
 
 export class TankEvent {
@@ -36,6 +37,12 @@ export class BulletFactory implements IEventSubscriber {
     const position = this.getBulletPosition(tank)
     const bullet = new Bullet(this.eventManager, this.threeScene, tank)
     bullet.initializeBullet(position.getX(), position.getY())
+
+    // Reproducir sonido solo si es el jugador (como en el original)
+    if (tank.isPlayer()) {
+      SoundManager.getInstance().play('bullet_shot')
+    }
+
     return bullet
   }
 

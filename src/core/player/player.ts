@@ -3,6 +3,7 @@ import type { GameEvent } from '../event-manager'
 import type { IEventSubscriber } from '../event-manager'
 import { PointsFactoryEvent } from '../points-factory'
 import { TankEvent } from '../bullet-factory'
+import { PowerUpHandlerEvent } from '../power-up-handler'
 import { Tank } from '../../game-objects/tank'
 
 export const PlayerEvent = {
@@ -33,6 +34,7 @@ export class Player implements IEventSubscriber {
       PointsFactoryEvent.POINTS_CREATED,
       TankEvent.PLAYER_DESTROYED,
       TankEvent.ENEMY_DESTROYED,
+      PowerUpHandlerEvent.TANK,
     ])
   }
 
@@ -45,6 +47,8 @@ export class Player implements IEventSubscriber {
       } else {
         this.lives--
       }
+    } else if (event.name === PowerUpHandlerEvent.TANK) {
+      this.lives++
     } else if (event.name === TankEvent.ENEMY_DESTROYED) {
       const tank = event.tank as Tank
       if (tank.getValue() > 0) {
@@ -59,6 +63,10 @@ export class Player implements IEventSubscriber {
 
   public getLives(): number {
     return this.lives
+  }
+
+  public addLife(): void {
+    this.lives++
   }
 
   public getTanks(type: string): number {

@@ -6,6 +6,7 @@ import { ImageManager } from '../../core/image-manager'
 import { Tank } from '../tank/tank'
 import { Wall } from '../walls/wall'
 import { Base } from '../base/base'
+import { SoundManager } from '../../core/sound-manager'
 import * as THREE from 'three'
 
 export class BulletEvent {
@@ -100,8 +101,25 @@ export class Bullet extends Sprite {
 
   public notify(event: GameEvent): void {
     if (this.isOutOfBounds(event)) {
+      // Reproducir sonido solo si es del jugador (como en el original)
+      if (this.tank.isPlayer()) {
+        SoundManager.getInstance().play('bullet_hit_1')
+      }
       this.destroy()
     } else if (this.isWallCollision(event)) {
+      // Reproducir sonido solo si es del jugador (como en el original)
+      if (this.tank.isPlayer()) {
+        const wall = event.sprite as Wall
+        // Usar isInvincibleForNormalBullets() para determinar el tipo de muro
+        // (evita importación circular con SteelWall y BrickWall)
+        if (wall.isInvincibleForNormalBullets()) {
+          // Muro de acero
+          SoundManager.getInstance().play('bullet_hit_1')
+        } else {
+          // Muro de ladrillo
+          SoundManager.getInstance().play('bullet_hit_2')
+        }
+      }
       this.destroy()
     } else if (this.isBaseCollision(event)) {
       this.destroy()

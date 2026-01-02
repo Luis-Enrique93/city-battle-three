@@ -65,50 +65,23 @@ export class BaseWallBuilder {
       !this.threeScene ||
       !this.spriteContainer
     ) {
-      console.warn('BaseWallBuilder.buildWall: Missing required dependencies')
       return
     }
-
-    console.log(
-      `BaseWallBuilder.buildWall: Creating ${this.positions.length} walls with factory:`,
-      this.wallFactory.constructor.name,
-    )
 
     for (const position of this.positions) {
       const wall = this.wallFactory.create(this.eventManager, this.threeScene)
       // Usar setWallPosition para asegurar que la posición se actualice correctamente
       // incluso si el sprite se crea de forma asíncrona
       wall.setWallPosition(position.getX(), position.getY())
-      console.log(
-        `BaseWallBuilder.buildWall: Created wall at (${position.getX()}, ${position.getY()}), destroyed: ${wall.isDestroyed()}`,
-      )
       // El wall disparará SpriteEvent.CREATED en su constructor
       // y se agregará automáticamente al SpriteContainer
     }
-
-    // Verificar que los muros se agregaron al container
-    setTimeout(() => {
-      const walls = this.spriteContainer!.getWalls()
-      console.log(
-        `BaseWallBuilder.buildWall: Total walls in container: ${walls.length}`,
-      )
-      const wallsAtPositions = walls.filter(wall => {
-        return this.positions.some(
-          pos => wall.getX() === pos.getX() && wall.getY() === pos.getY(),
-        )
-      })
-      console.log(
-        `BaseWallBuilder.buildWall: Walls at target positions: ${wallsAtPositions.length}`,
-      )
-    }, 100)
   }
 
   public destroyWall(): void {
     if (!this.spriteContainer) {
       return
     }
-
-    console.log('BaseWallBuilder.destroyWall: Starting destruction')
 
     // Crear una copia del array para evitar modificar mientras iteramos
     const walls = [...this.spriteContainer.getWalls()]
@@ -130,16 +103,9 @@ export class BaseWallBuilder {
       }
     }
 
-    console.log(
-      `BaseWallBuilder.destroyWall: Found ${wallsToDestroy.length} walls to destroy`,
-    )
-
     // Luego destruirlos
     for (const wall of wallsToDestroy) {
       if (!wall.isDestroyed()) {
-        console.log(
-          `BaseWallBuilder.destroyWall: Destroying wall at (${wall.getX()}, ${wall.getY()})`,
-        )
         wall.destroy()
       }
     }

@@ -4,6 +4,7 @@ import type { IEventSubscriber } from '../event-manager'
 import { TankEvent } from '../../core/bullet-factory'
 import { PowerUp, PowerUpType } from '../../game-objects/power-up'
 import { Point } from '../../geometry'
+import { SoundManager } from '../sound-manager'
 import * as THREE from 'three'
 
 export class PowerUpFactory implements IEventSubscriber {
@@ -41,11 +42,14 @@ export class PowerUpFactory implements IEventSubscriber {
     powerUp.setType(randomType)
 
     if (this.positions.length > 0) {
-      const randomPosition =
-        this.positions[Math.floor(Math.random() * this.positions.length)]
+      // Seleccionar una posición aleatoria (como en el original)
+      const randomIndex = Math.floor(Math.random() * this.positions.length)
+      const randomPosition = this.positions[randomIndex]
       powerUp.setXY(randomPosition.getX(), randomPosition.getY())
-      // PowerUp actualizará su posición en updateHook()
     }
+
+    // Reproducir sonido cuando aparece el power-up (como en el original)
+    SoundManager.getInstance().play('powerup_appear')
 
     return powerUp
   }

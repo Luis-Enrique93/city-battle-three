@@ -15,7 +15,6 @@ export class Renderer {
     this.scene.background = new THREE.Color(0x000000)
 
     // Cámara ortográfica para 2D
-    const aspect = Globals.CANVAS_WIDTH / Globals.CANVAS_HEIGHT
     this.camera = new THREE.OrthographicCamera(
       -Globals.CANVAS_WIDTH / 2,
       Globals.CANVAS_WIDTH / 2,
@@ -33,6 +32,11 @@ export class Renderer {
     })
     this.renderer.setSize(Globals.CANVAS_WIDTH, Globals.CANVAS_HEIGHT)
     this.renderer.setPixelRatio(window.devicePixelRatio)
+
+    // Configurar color space y tone mapping para colores más vibrantes
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace
+    this.renderer.toneMapping = THREE.NoToneMapping
+    this.renderer.toneMappingExposure = 1.0
 
     // Agregar canvas al contenedor
     container.appendChild(this.renderer.domElement)

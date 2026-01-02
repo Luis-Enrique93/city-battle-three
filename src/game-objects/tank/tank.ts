@@ -11,6 +11,11 @@ import { TankEvent } from '../../core/bullet-factory'
 import { Wall } from '../walls/wall'
 import { Base } from '../base/base'
 import { Water } from '../water/water'
+import { TankStateInvincibleEvent } from './tank-state-invincible'
+import { TankStateInvincible } from './tank-state-invincible'
+import { TankStateNormal } from './tank-state-normal'
+import { TankStateAppearingEvent } from './tank-state-appearing'
+import type { ITankState } from './tank-state'
 import * as THREE from 'three'
 
 export class Tank extends Sprite {
@@ -24,8 +29,6 @@ export class Tank extends Sprite {
 
   private type: string = Tank.Type.PLAYER_1
   private colorValue: number = 0
-  private trackFrame: number = 1
-  private trackAnimationTimer: number = 0
   private turnSmoothSens: number = Globals.TILE_SIZE - 1
   private turnRoundTo: number = Globals.TILE_SIZE
   private isPlayerTank: boolean = true
@@ -40,7 +43,8 @@ export class Tank extends Sprite {
   private hitCount: number = 0
   private hitLimit: number = 1
   private upgradeLevel: number = 0
-  private invincible: boolean = false
+  private trackAnimationDuration: number = 2
+  private state: ITankState
 
   constructor(eventManager: EventManager, threeScene: THREE.Scene) {
     super(eventManager, threeScene)
@@ -49,7 +53,12 @@ export class Tank extends Sprite {
       CollisionDetectorEvent.COLLISION,
       CollisionDetectorEvent.OUT_OF_BOUNDS,
       BulletEvent.DESTROYED,
+      TankStateInvincibleEvent.END,
+      TankStateAppearingEvent.END,
     ])
+
+    // Inicializar con estado normal
+    this.state = new TankStateNormal(this)
 
     this.setDimensions(Globals.UNIT_SIZE, Globals.UNIT_SIZE)
     this.setNormalSpeed(2)
@@ -81,9 +90,6 @@ export class Tank extends Sprite {
 
   private value: number = 0
   private flashing: boolean = false
-  private flashTimer: number = 0
-  private flashDuration: number = 7
-  private flashed: boolean = true
 
   public setValue(value: number): void {
     this.value = value
@@ -101,43 +107,21 @@ export class Tank extends Sprite {
     this.flashing = true
   }
 
-  private updateFlash(): void {
-    if (!this.flashing || this.hitCount > 0) {
-      return
-    }
-    this.flashTimer++
-    if (this.flashTimer >= this.flashDuration) {
-      this.flashTimer = 0
-      this.flashed = !this.flashed
-      // Actualizar textura cuando cambia el estado de flash
-      this.updateTexture()
-    }
-  }
-
   public setNormalSpeed(speed: number): void {
     super.setNormalSpeed(speed)
   }
 
+  public getColorValue(): number {
+    return this.colorValue
+  }
+
+  public setColorValue(value: number): void {
+    this.colorValue = value
+    this.updateTexture()
+  }
+
   private getImageName(): string {
-    const direction = this.getDirection()
-    const directionStr =
-      direction === SpriteDirection.UP
-        ? 'up'
-        : direction === SpriteDirection.DOWN
-        ? 'down'
-        : direction === SpriteDirection.LEFT
-        ? 'left'
-        : 'right'
-    let imageName = `tank_${this.type}_${directionStr}_c${this.colorValue}_t${this.trackFrame}`
-    // Agregar "_f" si está flashing y flashed es true
-    if (this.flashing && this.flashed && this.hitCount === 0) {
-      imageName += '_f'
-    }
-    // Agregar "_s1", "_s2", "_s3" según el nivel de mejora (solo para tanques del jugador)
-    if (this.isPlayer() && this.upgradeLevel > 0) {
-      imageName += `_s${this.upgradeLevel}`
-    }
-    return imageName
+    return this.state.getImageName()
   }
 
   private updateTexture(): void {
@@ -154,6 +138,9 @@ export class Tank extends Sprite {
     }
   }
   public move(): void {
+    if (!this.state.canMove()) {
+      return
+    }
     if (this.isTurn()) {
       this.smoothTurn()
     }
@@ -202,20 +189,9 @@ export class Tank extends Sprite {
   }
 
   protected updateHook(): void {
-    if (this.getSpeed() > 0) {
-      this.trackAnimationTimer++
-      if (this.trackAnimationTimer >= 2) {
-        this.trackAnimationTimer = 0
-        this.trackFrame = this.trackFrame === 1 ? 2 : 1
-        this.updateTexture()
-      }
-    }
-    this.updateFlash()
+    this.state.update()
     this.updateThreeSpritePosition()
-    // Actualizar estado de invencibilidad si existe
-    if ((this as any).invincibleState) {
-      ;(this as any).invincibleState.update()
-    }
+    this.updateTexture()
   }
 
   public setTankPosition(x: number, y: number): void {
@@ -259,6 +235,9 @@ export class Tank extends Sprite {
     if (this.isDestroyed()) {
       return
     }
+    if (!this.state.canShoot()) {
+      return
+    }
     if (this.bullets >= this.bulletsLimit) {
       return
     }
@@ -272,6 +251,20 @@ export class Tank extends Sprite {
   public notify(event: GameEvent): void {
     if (event.name === BulletEvent.DESTROYED && event.tank === this) {
       this.bullets--
+    } else if (
+      event.name === TankStateAppearingEvent.END &&
+      event.tank === this
+    ) {
+      this.stateAppearingEnd()
+    } else if (
+      event.name === TankStateInvincibleEvent.END &&
+      event.tank === this
+    ) {
+      // Volver al estado normal cuando termine la invencibilidad
+      if (this.state instanceof TankStateInvincible) {
+        ;(this.state as TankStateInvincible).destroy()
+      }
+      this.state = new TankStateNormal(this)
     } else if (this.isBulletCollision(event) && this.canBeDestroyed()) {
       this.hit()
     } else if (
@@ -326,73 +319,36 @@ export class Tank extends Sprite {
     if (event.name !== CollisionDetectorEvent.COLLISION) {
       return false
     }
-    // Caso 1: El tanque es el initiator y colisiona con una bala
+
+    let bullet: Bullet | null = null
+    let bulletTank: Tank | null = null
+
+    // Caso 1: Este tanque es el initiator y colisiona con una bala
     if (event.initiator === this && event.sprite instanceof Bullet) {
-      const bullet = event.sprite as Bullet
-      const bulletTank = bullet.getTank()
-      // No recibir daño de tus propias balas
-      if (bulletTank === this) {
-        return false
-      }
-      // Enemigos no se dañan entre sí
-      if (this.isEnemy() && bulletTank.isEnemy()) {
-        return false
-      }
-      // Jugador no se daña de sus propias balas
-      if (this.isPlayer() && bulletTank.isPlayer()) {
-        return false
-      }
-      // Si el tanque es invencible, no puede ser destruido por balas
-      if (this.invincible) {
-        return false
-      }
-      return true
+      bullet = event.sprite as Bullet
+      bulletTank = bullet.getTank()
     }
     // Caso 2: Una bala es el initiator y colisiona con este tanque
-    if (event.initiator instanceof Bullet && event.sprite === this) {
-      const bullet = event.initiator as Bullet
-      const bulletTank = bullet.getTank()
-      // No recibir daño de tus propias balas
-      if (bulletTank === this) {
-        return false
-      }
-      // Enemigos no se dañan entre sí
-      if (this.isEnemy() && bulletTank.isEnemy()) {
-        return false
-      }
-      // Jugador no se daña de sus propias balas
-      if (this.isPlayer() && bulletTank.isPlayer()) {
-        return false
-      }
-      // Si el tanque es invencible, no puede ser destruido por balas
-      if (this.invincible) {
-        return false
-      }
-      return true
+    else if (event.initiator instanceof Bullet && event.sprite === this) {
+      bullet = event.initiator as Bullet
+      bulletTank = bullet.getTank()
+    } else {
+      return false
     }
-    // Caso 2: Una bala es el initiator y colisiona con este tanque
-    if (event.initiator instanceof Bullet && event.sprite === this) {
-      const bullet = event.initiator as Bullet
-      const bulletTank = bullet.getTank()
-      // No recibir daño de tus propias balas
-      if (bulletTank === this) {
-        return false
-      }
-      // Enemigos no se dañan entre sí
-      if (this.isEnemy() && bulletTank.isEnemy()) {
-        return false
-      }
-      // Jugador no se daña de sus propias balas
-      if (this.isPlayer() && bulletTank.isPlayer()) {
-        return false
-      }
-      // Si el tanque es invencible, no puede ser destruido por balas
-      if (this.invincible) {
-        return false
-      }
-      return true
+
+    // No recibir daño de tus propias balas
+    if (bulletTank === this) {
+      return false
     }
-    return false
+    // Enemigos no se dañan entre sí
+    if (this.isEnemy() && bulletTank.isEnemy()) {
+      return false
+    }
+    // Jugador no se daña de sus propias balas
+    if (this.isPlayer() && bulletTank.isPlayer()) {
+      return false
+    }
+    return true
   }
 
   private resolveCollisionWithSprite(other: Sprite): void {
@@ -423,11 +379,11 @@ export class Tank extends Sprite {
   }
 
   public isCollidable(): boolean {
-    return true // TODO: Implement tank states (appearing, invincible, etc.)
+    return this.state.isCollidable()
   }
 
   public canBeDestroyed(): boolean {
-    return true // TODO: Implement tank states (appearing, invincible, etc.)
+    return this.state.canBeDestroyed()
   }
 
   public hit(): void {
@@ -463,7 +419,7 @@ export class Tank extends Sprite {
 
     if (this.upgradeLevel === 1) {
       // Nivel 1: Balas más rápidas
-      this.setBulletSpeed(4) // FAST speed
+      this.setBulletSpeed(BulletSpeed.FAST)
     } else if (this.upgradeLevel === 2) {
       // Nivel 2: Puede disparar 2 balas a la vez
       this.setBulletsLimit(2)
@@ -478,24 +434,56 @@ export class Tank extends Sprite {
     return this.upgradeLevel
   }
 
+  public getTrackAnimationDuration(): number {
+    return this.trackAnimationDuration
+  }
+
+  public setTrackAnimationDuration(duration: number): void {
+    this.trackAnimationDuration = duration
+  }
+
   public getEventManager(): EventManager {
     return this.eventManager
   }
 
-  public setInvincible(invincible: boolean): void {
-    this.invincible = invincible
+  public setState(state: ITankState): void {
+    // Si el estado anterior es TankStateInvincible, destruir el escudo
+    if (this.state instanceof TankStateInvincible) {
+      ;(this.state as TankStateInvincible).destroy()
+    }
+    this.state = state
+    this.updateTexture()
+  }
+
+  public getState(): ITankState {
+    return this.state
   }
 
   public isInvincible(): boolean {
-    return this.invincible
+    return this.state instanceof TankStateInvincible
+  }
+
+  private stateAppearingEnd(): void {
+    if (!this.threeScene) {
+      return
+    }
+    if (this.isPlayer()) {
+      // Para el jugador, pasar a estado invencible después de aparecer
+      const invincibleState = new TankStateInvincible(this, this.threeScene)
+      invincibleState.setStateDuration(110) // Duración del respawn invincibility
+      this.setState(invincibleState)
+      this.setDirection(SpriteDirection.UP)
+    } else {
+      // Para enemigos, pasar a estado normal
+      this.setState(new TankStateNormal(this))
+      this.setDirection(SpriteDirection.DOWN)
+    }
   }
 
   protected destroyHook(): void {
-    // Destruir estado de invencibilidad si existe
-    if ((this as any).invincibleState) {
-      ;(this as any).invincibleState.destroy()
-      ;(this as any).invincibleState = null
-      this.invincible = false
+    // Destruir estado si es TankStateInvincible
+    if (this.state instanceof TankStateInvincible) {
+      ;(this.state as TankStateInvincible).destroy()
     }
 
     this.eventManager.fireEvent({

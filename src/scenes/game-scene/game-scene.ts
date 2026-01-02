@@ -18,7 +18,10 @@ import { EnemyFactory, EnemyFactoryEvent } from '../../core/enemy-factory'
 import { AITankControllerContainer } from '../../core/ai-tank-controller-container'
 import { AITankControllerFactory } from '../../core/ai-tank-controller-factory'
 import { Player, PlayerEvent } from '../../core/player'
-import { PlayerTankFactory } from '../../core/player-tank-factory'
+import {
+  PlayerTankFactory,
+  PlayerTankFactoryEvent,
+} from '../../core/player-tank-factory'
 import { Rect } from '../../geometry/rect'
 import { Point } from '../../geometry'
 import * as THREE from 'three'
@@ -27,6 +30,14 @@ import { PowerUpHandler } from '../../core/power-up-handler'
 import { FreezeTimer } from '../../core/freeze-timer'
 import { ShovelHandler } from '../../core/shovel-handler'
 import { BaseWallBuilder } from '../../core/base-wall-builder'
+import { LivesView } from '../../ui/lives-view/lives-view'
+import { EnemyFactoryView } from '../../ui/enemy-factory-view/enemy-factory-view'
+import { StageFlag } from '../../ui/stage-flag/stage-flag'
+import { StageMessage } from '../../ui/stage-message/stage-message'
+import { Curtain } from '../../ui/curtain/curtain'
+import { Script } from '../../core/script/script'
+import { Delay } from '../../core/script/delay'
+import { SoundManager } from '../../core/sound-manager'
 
 export class GameScene implements IScene, IEventSubscriber {
   private threeScene: THREE.Scene
@@ -44,8 +55,20 @@ export class GameScene implements IScene, IEventSubscriber {
   private freezeTimer: FreezeTimer
   private shovelHandler: ShovelHandler
   private currentStage: number
+  private livesView: LivesView | null = null
+  private enemyFactoryView: EnemyFactoryView | null = null
+  private stageFlag: StageFlag | null = null
+  private curtain!: Curtain
+  private stageMessage!: StageMessage
+  private script!: Script
+  private levelVisible: boolean = false
 
-  constructor(sceneManager: ISceneManager, threeScene: THREE.Scene, stage = 1) {
+  constructor(
+    sceneManager: ISceneManager,
+    threeScene: THREE.Scene,
+    stage = 1,
+    player?: Player,
+  ) {
     this.threeScene = threeScene
     this.sceneManager = sceneManager
     this.currentStage = stage
@@ -56,10 +79,11 @@ export class GameScene implements IScene, IEventSubscriber {
       Keyboard.Event.KEY_RELEASED,
       EnemyFactoryEvent.LAST_ENEMY_DESTROYED,
       PlayerEvent.OUT_OF_LIVES,
+      PlayerTankFactoryEvent.PLAYER_TANK_CREATED,
     ])
 
-    // Crear Player
-    this.player = new Player()
+    // Usar player existente o crear uno nuevo (como en el original)
+    this.player = player === undefined ? new Player() : player
     this.player.setEventManager(eventManager)
 
     // Crear PlayerTankFactory para respawn
@@ -112,6 +136,56 @@ export class GameScene implements IScene, IEventSubscriber {
     // Crear tanque inicial del jugador
     this.playerTankFactory.create()
     this.setupEnemyFactory(stage)
+
+    // Crear contenedor UI moderno
+    this.createUIContainer()
+
+    // Crear componentes UI
+    this.livesView = new LivesView(this.player)
+    this.enemyFactoryView = new EnemyFactoryView(this.enemyFactory)
+    this.stageFlag = new StageFlag(stage)
+
+    // Crear Curtain y StageMessage (como en el original)
+    this.curtain = new Curtain()
+    this.stageMessage = new StageMessage(this.currentStage)
+
+    // Crear Script para secuenciar la animación inicial (como en el original)
+    this.script = new Script()
+    this.script.enqueue({
+      update: () => {
+        this.curtain.fall()
+        if (this.curtain.isFallen()) {
+          this.script.actionCompleted()
+        }
+      },
+    })
+    this.script.enqueue({
+      execute: () => {
+        this.stageMessage.show()
+        SoundManager.getInstance().play('stage_start')
+      },
+    })
+    this.script.enqueue(new Delay(this.script, 60))
+    this.script.enqueue({
+      execute: () => {
+        this.stageMessage.hide()
+        this.levelVisible = true
+      },
+    })
+    this.script.enqueue({
+      update: () => {
+        this.curtain.rise()
+        if (this.curtain.isRisen()) {
+          this.script.actionCompleted()
+        }
+      },
+    })
+    // Después de que la cortina suba, el nivel continúa normalmente
+    this.script.enqueue({
+      execute: () => {
+        // El nivel ya está visible y funcionando
+      },
+    })
   }
 
   private setupBaseWallBuilder(eventManager: EventManager): void {
@@ -188,28 +262,47 @@ export class GameScene implements IScene, IEventSubscriber {
     this.enemyFactory.setEnemies(stageData.tanks)
     this.enemyFactory.setEnemyCountLimit(4)
 
-    // Posiciones donde pueden aparecer power-ups (centro del mapa)
+    // Posiciones donde pueden aparecer power-ups (grid 4x4 como en el original)
+    // Usar los mismos offsets que el original (+15, +17) para evitar muros
+    const powerUpCol1X = gameFieldX + Globals.UNIT_SIZE + 15
+    const powerUpCol2X = gameFieldX + 4 * Globals.UNIT_SIZE + 15
+    const powerUpCol3X = gameFieldX + 7 * Globals.UNIT_SIZE + 15
+    const powerUpCol4X = gameFieldX + 10 * Globals.UNIT_SIZE + 15
+
+    const powerUpRow1Y = gameFieldY + Globals.UNIT_SIZE + 17
+    const powerUpRow2Y = gameFieldY + 4 * Globals.UNIT_SIZE + 17
+    const powerUpRow3Y = gameFieldY + 7 * Globals.UNIT_SIZE + 17
+    const powerUpRow4Y = gameFieldY + 10 * Globals.UNIT_SIZE + 17
+
     this.powerUpFactory.setPositions([
-      new Point(
-        gameFieldX + 6 * Globals.UNIT_SIZE,
-        gameFieldY + 6 * Globals.UNIT_SIZE,
-      ),
-      new Point(
-        gameFieldX + 6 * Globals.UNIT_SIZE,
-        gameFieldY + 7 * Globals.UNIT_SIZE,
-      ),
-      new Point(
-        gameFieldX + 7 * Globals.UNIT_SIZE,
-        gameFieldY + 6 * Globals.UNIT_SIZE,
-      ),
-      new Point(
-        gameFieldX + 7 * Globals.UNIT_SIZE,
-        gameFieldY + 7 * Globals.UNIT_SIZE,
-      ),
+      new Point(powerUpCol1X, powerUpRow1Y),
+      new Point(powerUpCol2X, powerUpRow1Y),
+      new Point(powerUpCol3X, powerUpRow1Y),
+      new Point(powerUpCol4X, powerUpRow1Y),
+      new Point(powerUpCol1X, powerUpRow2Y),
+      new Point(powerUpCol2X, powerUpRow2Y),
+      new Point(powerUpCol3X, powerUpRow2Y),
+      new Point(powerUpCol4X, powerUpRow2Y),
+      new Point(powerUpCol1X, powerUpRow3Y),
+      new Point(powerUpCol2X, powerUpRow3Y),
+      new Point(powerUpCol3X, powerUpRow3Y),
+      new Point(powerUpCol4X, powerUpRow3Y),
+      new Point(powerUpCol1X, powerUpRow4Y),
+      new Point(powerUpCol2X, powerUpRow4Y),
+      new Point(powerUpCol3X, powerUpRow4Y),
+      new Point(powerUpCol4X, powerUpRow4Y),
     ])
   }
 
   public update(): void {
+    // Actualizar Script primero (como en el original)
+    this.script.update()
+
+    // Si el nivel no es visible aún, no actualizar el juego
+    if (!this.levelVisible) {
+      return
+    }
+
     // Actualizar referencia al tanque del jugador (por si respawneó)
     this.updatePlayerTankReference()
 
@@ -224,10 +317,57 @@ export class GameScene implements IScene, IEventSubscriber {
     this.aiControllersContainer.update()
     this.freezeTimer.update()
     this.shovelHandler.update()
+
+    // Actualizar UI
+    if (this.livesView) {
+      this.livesView.update()
+    }
+    if (this.enemyFactoryView) {
+      this.enemyFactoryView.update()
+    }
   }
 
   public draw(_renderer: Renderer): void {
     // El renderizado se hace automáticamente por Three.js
+  }
+
+  private createUIContainer(): void {
+    // Crear contenedor UI si no existe
+    let uiContainer = document.querySelector(
+      '.game-ui-container',
+    ) as HTMLDivElement
+    if (!uiContainer) {
+      uiContainer = document.createElement('div')
+      uiContainer.className = 'game-ui-container'
+      document.body.appendChild(uiContainer)
+    }
+  }
+
+  public destroy(): void {
+    // Limpiar componentes UI
+    if (this.livesView) {
+      this.livesView.destroy()
+      this.livesView = null
+    }
+    if (this.enemyFactoryView) {
+      this.enemyFactoryView.destroy()
+      this.enemyFactoryView = null
+    }
+    if (this.stageFlag) {
+      this.stageFlag.destroy()
+      this.stageFlag = null
+    }
+    if (this.stageMessage) {
+      this.stageMessage.destroy()
+    }
+    if (this.curtain) {
+      this.curtain.destroy()
+    }
+    // Limpiar contenedor UI si está vacío
+    const uiContainer = document.querySelector('.game-ui-container')
+    if (uiContainer && uiContainer.children.length === 0) {
+      uiContainer.remove()
+    }
   }
 
   public notify(event: GameEvent): void {
@@ -239,6 +379,14 @@ export class GameScene implements IScene, IEventSubscriber {
     if (event.name === PlayerEvent.OUT_OF_LIVES) {
       this.playerTankFactory.setActive(false)
       // TODO: Show game over screen
+      return
+    }
+
+    if (event.name === PlayerTankFactoryEvent.PLAYER_TANK_CREATED) {
+      // Cuando el tanque respawnea, limpiar las teclas presionadas para evitar movimiento automático
+      this.pressedKeys.clear()
+      // Actualizar referencia al nuevo tanque
+      this.updatePlayerTankReference()
       return
     }
 
@@ -257,11 +405,14 @@ export class GameScene implements IScene, IEventSubscriber {
   }
 
   private handleWin(): void {
-    // Avanzar al siguiente stage después de un delay
+    // Mostrar estadísticas del stage antes de avanzar
     setTimeout(() => {
-      const nextStage = this.currentStage + 1
-      this.sceneManager.toGameScene(nextStage)
-    }, 2000) // 2 segundos de delay
+      this.sceneManager.toStageStatisticsScene(
+        this.currentStage,
+        this.player,
+        false,
+      )
+    }, 1000) // 1 segundo de delay antes de mostrar stats
   }
 
   private handleKeyPressed(key: number): void {

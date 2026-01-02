@@ -5,6 +5,7 @@ import { TankExplosion } from '../../game-objects/explosions/tank-explosion'
 import { TankEvent } from '../bullet-factory'
 import { Tank } from '../../game-objects/tank'
 import { Globals } from '../globals'
+import { SoundManager } from '../sound-manager'
 import * as THREE from 'three'
 
 export class TankExplosionFactory implements IEventSubscriber {
@@ -44,6 +45,10 @@ export class TankExplosionFactory implements IEventSubscriber {
       tankCenterX - this.explosionSize / 2,
       tankCenterY - this.explosionSize / 2,
     )
+
+    // Reproducir sonido de explosión (como en el original)
+    SoundManager.getInstance().play('explosion_1')
+
     return explosion
   }
 }

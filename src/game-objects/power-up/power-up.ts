@@ -1,4 +1,4 @@
-import { Sprite, SpriteEvent } from '../../sprites/sprite'
+import { Sprite } from '../../sprites/sprite'
 import { EventManager } from '../../core/event-manager'
 import type { GameEvent } from '../../core/event-manager'
 import { ImageManager } from '../../core/image-manager'
@@ -40,11 +40,6 @@ export class PowerUp extends Sprite {
       EnemyFactoryEvent.ENEMY_CREATED,
     ])
     this.updateTexture()
-    // Disparar MOVED para que CollisionDetector detecte colisiones con este sprite
-    this.eventManager.fireEvent({
-      name: SpriteEvent.MOVED,
-      sprite: this,
-    })
   }
 
   public setType(type: string): void {
@@ -97,7 +92,6 @@ export class PowerUp extends Sprite {
 
   protected updateHook(): void {
     this.blinkTimer.update()
-    // Solo actualizar posición si es visible (el sprite seguirá renderizándose pero podemos ocultarlo con opacity)
     if (this.threeSprite) {
       this.updateThreeSpritePosition()
       // Aplicar visibilidad del blink
@@ -107,32 +101,16 @@ export class PowerUp extends Sprite {
           : 0.0
       }
     }
-    // Disparar MOVED periódicamente para que CollisionDetector detecte colisiones
-    // (aunque el PowerUp no se mueve, necesitamos que se detecten colisiones cuando el tanque se mueve hacia él)
-    this.eventManager.fireEvent({
-      name: SpriteEvent.MOVED,
-      sprite: this,
-    })
   }
 
   public notify(event: GameEvent): void {
     if (this.isCollidedWithPlayer(event)) {
-      // Obtener el tanque del jugador de la colisión
-      const tank =
-        event.initiator instanceof Tank
-          ? (event.initiator as Tank)
-          : event.sprite instanceof Tank
-          ? (event.sprite as Tank)
-          : null
-
-      if (tank && tank.isPlayer()) {
-        this.playerTank = tank
-        this.eventManager.fireEvent({
-          name: PowerUpEvent.PICK,
-          powerUp: this,
-        })
-        this.destroy()
-      }
+      this.playerTank = event.initiator as Tank
+      this.eventManager.fireEvent({
+        name: PowerUpEvent.PICK,
+        powerUp: this,
+      })
+      this.destroy()
     } else if (event.name === EnemyFactoryEvent.ENEMY_CREATED) {
       const enemy = event.enemy as Tank
       if (enemy.isFlashing()) {
@@ -145,29 +123,15 @@ export class PowerUp extends Sprite {
     if (event.name !== CollisionDetectorEvent.COLLISION) {
       return false
     }
-    // El evento puede venir de dos formas:
-    // 1. Tanque (initiator) colisiona con PowerUp (sprite)
-    // 2. PowerUp (initiator) colisiona con Tanque (sprite)
-    const tank =
-      event.initiator instanceof Tank
-        ? (event.initiator as Tank)
-        : event.sprite instanceof Tank
-        ? (event.sprite as Tank)
-        : null
-
-    if (!tank) {
+    if (!(event.initiator instanceof Tank)) {
       return false
     }
-
-    if (!tank.isPlayer()) {
+    if (!event.initiator.isPlayer()) {
       return false
     }
-
-    // Verificar que el power-up esté involucrado en la colisión
-    if (event.initiator !== this && event.sprite !== this) {
+    if (event.sprite !== this) {
       return false
     }
-
     return true
   }
 

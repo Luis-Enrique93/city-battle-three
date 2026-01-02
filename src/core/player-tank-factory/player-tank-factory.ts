@@ -4,6 +4,8 @@ import type { IEventSubscriber } from '../event-manager'
 import { TankExplosionEvent } from '../../game-objects/explosions/tank-explosion'
 import { TankExplosion } from '../../game-objects/explosions/tank-explosion'
 import { Tank } from '../../game-objects/tank'
+import { TankStateAppearing } from '../../game-objects/tank/tank-state-appearing'
+import { SpriteDirection } from '../../sprites/sprite'
 import { Point } from '../../geometry'
 import * as THREE from 'three'
 
@@ -44,7 +46,12 @@ export class PlayerTankFactory implements IEventSubscriber {
     const tank = new Tank(this.eventManager, this.threeScene)
     tank.setIsPlayer(true)
     tank.setTankPosition(this.appearPosition.getX(), this.appearPosition.getY())
-    // TODO: Implement TankStateAppearing for spawn animation
+    // Resetear velocidad y dirección al respawnear
+    tank.setSpeed(0)
+    tank.setDirection(SpriteDirection.UP)
+    // Establecer estado de aparición (animación de respawn)
+    const appearingState = new TankStateAppearing(tank)
+    tank.setState(appearingState)
 
     this.eventManager.fireEvent({
       name: PlayerTankFactoryEvent.PLAYER_TANK_CREATED,

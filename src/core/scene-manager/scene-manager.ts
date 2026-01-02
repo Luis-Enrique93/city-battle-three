@@ -4,6 +4,7 @@ import type { Renderer } from '../renderer'
 import { LoadingScene } from '../../scenes/loading-scene'
 import { MainMenuScene } from '../../scenes/main-menu-scene'
 import { GameScene } from '../../scenes/game-scene'
+import { StageStatisticsScene } from '../../scenes/stage-statistics-scene/stage-statistics-scene'
 
 export class SceneManager implements ISceneManager {
   private eventManager: EventManager
@@ -20,6 +21,9 @@ export class SceneManager implements ISceneManager {
 
   public setScene(scene: IScene): void {
     // Limpiar escena anterior si existe
+    if (this.scene && typeof (this.scene as any).destroy === 'function') {
+      ;(this.scene as any).destroy()
+    }
     if (this.renderer && this.scene) {
       const threeScene = this.renderer.getScene()
       while (threeScene.children.length > 0) {
@@ -36,6 +40,10 @@ export class SceneManager implements ISceneManager {
   public toLoadingScene(): void {
     this.eventManager.removeAllSubscribers()
     if (this.renderer) {
+      // Limpiar escena anterior
+      if (this.scene && typeof (this.scene as any).destroy === 'function') {
+        ;(this.scene as any).destroy()
+      }
       // Limpiar escena primero
       const threeScene = this.renderer.getScene()
       while (threeScene.children.length > 0) {
@@ -50,6 +58,10 @@ export class SceneManager implements ISceneManager {
   public toMainMenuScene(arrived?: boolean): void {
     this.eventManager.removeAllSubscribers()
     if (this.renderer) {
+      // Limpiar escena anterior
+      if (this.scene && typeof (this.scene as any).destroy === 'function') {
+        ;(this.scene as any).destroy()
+      }
       // Limpiar escena primero
       const threeScene = this.renderer.getScene()
       while (threeScene.children.length > 0) {
@@ -68,13 +80,22 @@ export class SceneManager implements ISceneManager {
   public toGameScene(stage?: number, player?: unknown): void {
     this.eventManager.removeAllSubscribers()
     if (this.renderer) {
+      // Limpiar escena anterior
+      if (this.scene && typeof (this.scene as any).destroy === 'function') {
+        ;(this.scene as any).destroy()
+      }
       // Limpiar escena primero
       const threeScene = this.renderer.getScene()
       while (threeScene.children.length > 0) {
         threeScene.remove(threeScene.children[0])
       }
-      // Crear GameScene con stage (default 1)
-      const gameScene = new GameScene(this, threeScene, stage || 1)
+      // Crear GameScene con stage (default 1) y player (si existe)
+      const gameScene = new GameScene(
+        this,
+        threeScene,
+        stage || 1,
+        player as any,
+      )
       this.scene = gameScene
     }
   }
@@ -91,8 +112,26 @@ export class SceneManager implements ISceneManager {
     gameOver?: boolean,
   ): void {
     this.eventManager.removeAllSubscribers()
-    // TODO: Implement StageStatisticsScene
-    // this.scene = new StageStatisticsScene(this, stage, player, gameOver)
+    if (this.renderer) {
+      // Limpiar escena anterior
+      if (this.scene && typeof (this.scene as any).destroy === 'function') {
+        ;(this.scene as any).destroy()
+      }
+      // Limpiar escena primero
+      const threeScene = this.renderer.getScene()
+      while (threeScene.children.length > 0) {
+        threeScene.remove(threeScene.children[0])
+      }
+      // Crear StageStatisticsScene
+      const stageStatsScene = new StageStatisticsScene(
+        this,
+        threeScene,
+        stage || 1,
+        player as any,
+        gameOver || false,
+      )
+      this.scene = stageStatsScene
+    }
   }
 
   public toGameOverScene(): void {

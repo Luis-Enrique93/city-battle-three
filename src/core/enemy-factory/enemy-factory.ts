@@ -1,6 +1,7 @@
 import { EventManager } from '../event-manager'
 import type { IEventSubscriber, GameEvent } from '../event-manager'
 import { Tank } from '../../game-objects/tank'
+import { TankStateAppearing } from '../../game-objects/tank/tank-state-appearing'
 import { Point } from '../../geometry'
 import { TankExplosionEvent } from '../../game-objects/explosions/tank-explosion'
 import { TankExplosion } from '../../game-objects/explosions/tank-explosion'
@@ -84,19 +85,24 @@ export class EnemyFactory implements IEventSubscriber {
     tank.setIsPlayer(false)
     tank.setType(type)
     tank.setTankPosition(position.getX(), position.getY())
+    // Los enemigos aparecen con animación (como en el original)
+    // setState ya llama a updateTexture() internamente
+    tank.setState(new TankStateAppearing(tank))
 
-    // Configure tank based on type
+    // Configure tank based on type - siguiendo el patrón del original
     if (type === Tank.Type.BASIC) {
-      tank.setNormalSpeed(2)
+      tank.setMoveFrequency(2) // Se mueve cada 2 frames (más lento)
+      tank.setTrackAnimationDuration(4)
       tank.setValue(100)
     } else if (type === Tank.Type.FAST) {
-      tank.setNormalSpeed(3)
+      tank.setNormalSpeed(3) // Velocidad más alta, sin moveFrequency (se mueve cada frame)
       tank.setValue(200)
     } else if (type === Tank.Type.POWER) {
       tank.setBulletSpeed(4) // FAST speed
       tank.setValue(300)
     } else if (type === Tank.Type.ARMOR) {
-      tank.setNormalSpeed(2)
+      tank.setMoveFrequency(2) // Se mueve cada 2 frames (más lento)
+      tank.setTrackAnimationDuration(4)
       tank.setValue(400)
       // TODO: Implement hitLimit and colorValues
     }
