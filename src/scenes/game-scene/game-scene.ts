@@ -378,7 +378,8 @@ export class GameScene implements IScene, IEventSubscriber {
 
     if (event.name === PlayerEvent.OUT_OF_LIVES) {
       this.playerTankFactory.setActive(false)
-      // TODO: Show game over screen
+      // Ir a pantalla de Game Over con el player actual
+      this.sceneManager.toGameOverScene(this.player)
       return
     }
 

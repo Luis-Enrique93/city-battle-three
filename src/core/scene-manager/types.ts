@@ -14,4 +14,5 @@ export interface ISceneManager {
     player?: unknown,
     gameOver?: boolean,
   ): void
+  toGameOverScene(player?: unknown): void
 }

@@ -5,6 +5,7 @@ import { LoadingScene } from '../../scenes/loading-scene'
 import { MainMenuScene } from '../../scenes/main-menu-scene'
 import { GameScene } from '../../scenes/game-scene'
 import { StageStatisticsScene } from '../../scenes/stage-statistics-scene/stage-statistics-scene'
+import { GameOverScene } from '../../scenes/game-over-scene'
 
 export class SceneManager implements ISceneManager {
   private eventManager: EventManager
@@ -134,10 +135,22 @@ export class SceneManager implements ISceneManager {
     }
   }
 
-  public toGameOverScene(): void {
+  public toGameOverScene(player?: unknown): void {
     this.eventManager.removeAllSubscribers()
-    // TODO: Implement GameOverScene
-    // this.scene = new GameOverScene(this)
+    if (this.renderer) {
+      // Limpiar escena anterior
+      if (this.scene && typeof (this.scene as any).destroy === 'function') {
+        ;(this.scene as any).destroy()
+      }
+      // Limpiar escena primero
+      const threeScene = this.renderer.getScene()
+      while (threeScene.children.length > 0) {
+        threeScene.remove(threeScene.children[0])
+      }
+      // Crear GameOverScene con player
+      const gameOverScene = new GameOverScene(this, threeScene, player as any)
+      this.scene = gameOverScene
+    }
   }
 
   public update(): void {
