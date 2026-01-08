@@ -13,6 +13,7 @@ import { CollisionDetector } from '../../core/collision-detector'
 import { BulletFactory } from '../../core/bullet-factory'
 import { BulletExplosionFactory } from '../../core/bullet-explosion-factory'
 import { TankExplosionFactory } from '../../core/tank-explosion-factory'
+import { BaseExplosionFactory } from '../../core/base-explosion-factory'
 import { PointsFactory } from '../../core/points-factory'
 import { EnemyFactory, EnemyFactoryEvent } from '../../core/enemy-factory'
 import { AITankControllerContainer } from '../../core/ai-tank-controller-container'
@@ -37,7 +38,10 @@ import { StageMessage } from '../../ui/stage-message/stage-message'
 import { Curtain } from '../../ui/curtain/curtain'
 import { Script } from '../../core/script/script'
 import { Delay } from '../../core/script/delay'
+import { MoveFn } from '../../core/script/move-fn'
 import { SoundManager } from '../../core/sound-manager'
+import { BaseExplosionEvent } from '../../game-objects/explosions/base-explosion'
+import { GameOverMessage } from '../../ui/game-over-message/game-over-message'
 
 export class GameScene implements IScene, IEventSubscriber {
   private threeScene: THREE.Scene
@@ -61,7 +65,10 @@ export class GameScene implements IScene, IEventSubscriber {
   private curtain!: Curtain
   private stageMessage!: StageMessage
   private script!: Script
+  private gameOverMessage!: GameOverMessage
+  private gameOverScript!: Script
   private levelVisible: boolean = false
+  private gameOverActive: boolean = false
 
   constructor(
     sceneManager: ISceneManager,
@@ -80,6 +87,7 @@ export class GameScene implements IScene, IEventSubscriber {
       EnemyFactoryEvent.LAST_ENEMY_DESTROYED,
       PlayerEvent.OUT_OF_LIVES,
       PlayerTankFactoryEvent.PLAYER_TANK_CREATED,
+      BaseExplosionEvent.DESTROYED,
     ])
 
     // Usar player existente o crear uno nuevo (como en el original)
@@ -113,6 +121,7 @@ export class GameScene implements IScene, IEventSubscriber {
     new BulletFactory(eventManager, this.threeScene)
     new BulletExplosionFactory(eventManager, this.threeScene)
     new TankExplosionFactory(eventManager, this.threeScene)
+    new BaseExplosionFactory(eventManager, this.threeScene)
     new PointsFactory(eventManager, this.threeScene)
     this.powerUpFactory = new PowerUpFactory(eventManager, this.threeScene)
     const powerUpHandler = new PowerUpHandler(eventManager, this.threeScene)
@@ -184,6 +193,41 @@ export class GameScene implements IScene, IEventSubscriber {
     this.script.enqueue({
       execute: () => {
         // El nivel ya está visible y funcionando
+      },
+    })
+
+    // Crear GameOverMessage y script de game over (como en el original)
+    this.gameOverMessage = new GameOverMessage()
+    this.gameOverScript = new Script()
+    this.gameOverScript.setActive(false)
+    // Mover el mensaje desde y=213 hasta y=100 (centro de la pantalla)
+    // Convertir coordenadas del canvas original (416px altura) a coordenadas relativas
+    const canvasHeight = 416 // Altura del canvas original
+    const startY = 213
+    const endY = 100
+    // Convertir a coordenadas relativas basadas en la altura de la ventana
+    const windowHeight = document.documentElement.clientHeight
+    const relativeStartY = (startY / canvasHeight) * windowHeight
+    const relativeEndY = (endY / canvasHeight) * windowHeight
+    this.gameOverMessage.y = relativeStartY
+    this.gameOverScript.enqueue(
+      new MoveFn(
+        this.gameOverMessage,
+        'y',
+        relativeEndY,
+        100,
+        this.gameOverScript,
+      ),
+    )
+    this.gameOverScript.enqueue(new Delay(this.gameOverScript, 50))
+    this.gameOverScript.enqueue({
+      execute: () => {
+        // Ir a StageStatisticsScene con gameOver: true
+        this.sceneManager.toStageStatisticsScene(
+          this.currentStage,
+          this.player,
+          true,
+        )
       },
     })
   }
@@ -297,9 +341,28 @@ export class GameScene implements IScene, IEventSubscriber {
   public update(): void {
     // Actualizar Script primero (como en el original)
     this.script.update()
+    // Actualizar script de game over si está activo
+    if (this.gameOverScript.isActive()) {
+      this.gameOverScript.update()
+      this.gameOverMessage.updatePosition()
+    }
 
     // Si el nivel no es visible aún, no actualizar el juego
     if (!this.levelVisible) {
+      return
+    }
+
+    // Si game over está activo, no actualizar controles del jugador
+    if (this.gameOverActive) {
+      // Actualizar sprites pero no controles
+      const sprites = this.spriteContainer.getSprites()
+      for (const sprite of sprites) {
+        sprite.update()
+      }
+      this.enemyFactory.update()
+      this.aiControllersContainer.update()
+      this.freezeTimer.update()
+      this.shovelHandler.update()
       return
     }
 
@@ -377,9 +440,12 @@ export class GameScene implements IScene, IEventSubscriber {
     }
 
     if (event.name === PlayerEvent.OUT_OF_LIVES) {
-      this.playerTankFactory.setActive(false)
-      // Ir a pantalla de Game Over con el player actual
-      this.sceneManager.toGameOverScene(this.player)
+      this.handleGameOver()
+      return
+    }
+
+    if (event.name === BaseExplosionEvent.DESTROYED) {
+      this.handleGameOver()
       return
     }
 
@@ -398,11 +464,24 @@ export class GameScene implements IScene, IEventSubscriber {
       return
     }
 
+    // No procesar controles si game over está activo
+    if (this.gameOverActive) {
+      return
+    }
+
     if (event.name === Keyboard.Event.KEY_PRESSED) {
       this.handleKeyPressed(event.key as number)
     } else if (event.name === Keyboard.Event.KEY_RELEASED) {
       this.handleKeyReleased(event.key as number)
     }
+  }
+
+  private handleGameOver(): void {
+    // Desactivar controles del jugador (como en el original)
+    this.playerTankFactory.setActive(false)
+    this.gameOverActive = true
+    // Activar script de game over (como en el original)
+    this.gameOverScript.setActive(true)
   }
 
   private handleWin(): void {

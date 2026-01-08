@@ -93,8 +93,8 @@ export class StageStatistics {
       execute: () => {
         this.player.resetTanks()
         if (this.gameOver) {
-          // TODO: Ir a Game Over Scene
-          this.sceneManager.toMainMenuScene()
+          // Ir a Game Over Scene (como en el original)
+          this.sceneManager.toGameOverScene(this.player)
         } else {
           this.sceneManager.toGameScene(this.stage + 1, this.player)
         }
